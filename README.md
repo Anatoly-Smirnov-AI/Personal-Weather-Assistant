@@ -89,8 +89,8 @@ City not found. Please check the spelling and try again.
 1. **Clone or download** the project folder.  
 2. Inside the main folder, create a file called `.env` and add your API keys:
 
-# .env
-OPENWEATHER_API_KEY=your_openweather_api_key_here  
+.env example:
+OPENWEATHER_API_KEY=your_openweather_api_key_here
 grok_api=your_groq_api_key_here
 
 3. Install the required Python packages:
@@ -114,7 +114,6 @@ python weather_summary.py
 ## Useful info
 - The `.env` file should never be shared publicly.  
 - Use `.env.example` as a template to create your own configuration.  
-```markdown
 - You can copy `.env.example` → `.env` and fill in your own API keys.
 - Free tiers of both APIs are sufficient for testing.
 - The app validates city names and shows a friendly error if a city is not found.
