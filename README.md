@@ -1,7 +1,5 @@
 # Personal Weather Assistant
 
-> Version 1.4 — travel-by-date (DD-MM), smart year handling.
-
 I built this project to practice working with APIs and integrate AI into a practical everyday tool.  
 A simple AI-powered weather assistant that combines live data from **OpenWeatherMap** with smart analysis from the **Groq API**.  
 It provides short weather summaries, activity suggestions, and travel comparisons — all from the command line.
