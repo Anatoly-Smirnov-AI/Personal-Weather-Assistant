@@ -1,5 +1,6 @@
 import os
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 from groq import Groq
 
@@ -10,11 +11,11 @@ GROQ_KEY = os.getenv("grok_api")
 groq_client = Groq(api_key=GROQ_KEY)
 
 print("=" * 50)
-print("🌤  Personal Weather Assistant v1.0")
+print("🌤  Personal Weather Assistant v1.4")
 print("=" * 50)
 
 # === User input ===
-city_input = input("Enter city name (or two cities separated by comma for travel comparison): ")
+city_input = input("Enter city name (or two cities separated by comma for travel comparison): ").strip()
 
 # === Detect mode ===
 if "," in city_input:
@@ -29,8 +30,25 @@ else:
     city = city_input or "Zagreb"
     travel_mode = False
 
+# === Helper function for forecast ===
+def get_forecast_for_date(city, date_str):
+    forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&units=metric&appid={API_KEY}&lang=en"
+    forecast_data = requests.get(forecast_url).json()
+    if forecast_data.get("cod") != "200":
+        return None
+
+    for entry in forecast_data["list"]:
+        if entry["dt_txt"].startswith(date_str):
+            temp = entry["main"]["temp"]
+            humidity = entry["main"]["humidity"]
+            wind = entry["wind"]["speed"]
+            desc = entry["weather"][0]["description"]
+            return {"temp": temp, "humidity": humidity, "wind": wind, "desc": desc}
+    return None
+
 # === Single City Mode ===
 if not travel_mode:
+    # Validate city first
     url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&appid={API_KEY}&lang=en"
     response = requests.get(url)
     data = response.json()
@@ -39,36 +57,79 @@ if not travel_mode:
         print("City not found. Please check the spelling and try again.")
         exit()
 
-    name = data["name"]
-    temp = data["main"]["temp"]
-    humidity = data["main"]["humidity"]
-    wind = data["wind"]["speed"]
-    desc = data["weather"][0]["description"]
+    # Ask for optional date
+    date_input = input("Optional date (DD-MM) for forecast, press Enter for today: ").strip()
 
-    print()
-    print("=" * 50)
-    print(f"Weather summary for {name}")
-    print("-" * 50)
-    print(f"Temperature: {temp}°C")
-    print(f"Humidity: {humidity}%")
-    print(f"Wind speed: {wind} m/s")
-    print(f"Conditions: {desc.capitalize()}")
-    print("=" * 50)
+    adjusted_year = False
+    if date_input:
+        try:
+            now = datetime.now()
+            day, month = map(int, date_input.split("-"))
+            forecast_date = datetime(now.year, month, day)
+            if forecast_date < now:
+                forecast_date = forecast_date.replace(year=now.year + 1)
+                adjusted_year = True
+            date_input = forecast_date.strftime("%Y-%m-%d")
+        except ValueError:
+            print("Invalid date format. Please use DD-MM (e.g., 23-10).")
+            exit()
 
-    # === Activity Recommender ===
-    prompt = (
-        f"Current weather in {name}: {desc}, {temp}°C, humidity {humidity}%, wind {wind} m/s.\n"
-        "Suggest 3 short, realistic activities someone could do today based on this weather. "
-        "Avoid clothing advice, focus on fun or practical ideas."
-    )
+    if adjusted_year:
+        print("(Note: Date automatically adjusted to next year.)")
 
+    # === Forecast for that date ===
+    if date_input:
+        forecast = get_forecast_for_date(city, date_input)
+        if not forecast:
+            print("No forecast found for that date. Please check the range (max 5 days ahead).")
+            exit()
+
+        print()
+        print("=" * 50)
+        print(f"Weather forecast for {city.capitalize()} on {date_input}")
+        print("-" * 50)
+        print(f"Temperature: {forecast['temp']}°C")
+        print(f"Humidity: {forecast['humidity']}%")
+        print(f"Wind speed: {forecast['wind']} m/s")
+        print(f"Conditions: {forecast['desc'].capitalize()}")
+        print("=" * 50)
+
+        prompt = (
+            f"Weather forecast for {city.capitalize()} on {date_input}: "
+            f"{forecast['desc']}, {forecast['temp']}°C, humidity {forecast['humidity']}%, wind {forecast['wind']} m/s.\n"
+            "Suggest 3 short, realistic activities for that day (no clothing advice)."
+        )
+
+    else:
+        # === Current weather ===
+        name = data["name"]
+        temp = data["main"]["temp"]
+        humidity = data["main"]["humidity"]
+        wind = data["wind"]["speed"]
+        desc = data["weather"][0]["description"]
+
+        print()
+        print("=" * 50)
+        print(f"Weather summary for {name}")
+        print("-" * 50)
+        print(f"Temperature: {temp}°C")
+        print(f"Humidity: {humidity}%")
+        print(f"Wind speed: {wind} m/s")
+        print(f"Conditions: {desc.capitalize()}")
+        print("=" * 50)
+
+        prompt = (
+            f"Current weather in {name}: {desc}, {temp}°C, humidity {humidity}%, wind {wind} m/s.\n"
+            "Suggest 3 short, realistic activities based on this weather (no clothing advice)."
+        )
+
+    # === AI-generated activities ===
     response = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}],
     )
 
     activities = response.choices[0].message.content.strip()
-
     print("\n>>> Activity Recommendations <<<")
     print("-" * 50)
     print(activities)
@@ -77,36 +138,64 @@ if not travel_mode:
 
 # === Travel Assistant Mode ===
 if travel_mode:
-    url1 = f"https://api.openweathermap.org/data/2.5/weather?q={city1}&units=metric&appid={API_KEY}&lang=en"
-    url2 = f"https://api.openweathermap.org/data/2.5/weather?q={city2}&units=metric&appid={API_KEY}&lang=en"
+    date_input = input("Optional date (DD-MM) for forecast, press Enter for current comparison: ").strip()
 
-    data1 = requests.get(url1).json()
-    data2 = requests.get(url2).json()
+    # Convert date if provided
+    forecast_mode = False
+    if date_input:
+        try:
+            now = datetime.now()
+            day, month = map(int, date_input.split("-"))
+            forecast_date = datetime(now.year, month, day)
+            if forecast_date < now:
+                forecast_date = forecast_date.replace(year=now.year + 1)
+            date_input = forecast_date.strftime("%Y-%m-%d")
+            forecast_mode = True
+        except ValueError:
+            print("Invalid date format. Please use DD-MM (e.g., 23-10).")
+            exit()
 
-    if data1.get("cod") != 200 or data2.get("cod") != 200:
-        print("One or both cities not found. Please check the spelling and try again.")
-        exit()
+    # === Fetch data ===
+    if forecast_mode:
+        data1 = get_forecast_for_date(city1, date_input)
+        data2 = get_forecast_for_date(city2, date_input)
+        if not data1 or not data2:
+            print("No forecast available for one or both cities. Try a closer date (within 5 days).")
+            exit()
+        name1, name2 = city1.capitalize(), city2.capitalize()
+    else:
+        url1 = f"https://api.openweathermap.org/data/2.5/weather?q={city1}&units=metric&appid={API_KEY}&lang=en"
+        url2 = f"https://api.openweathermap.org/data/2.5/weather?q={city2}&units=metric&appid={API_KEY}&lang=en"
+        data1 = requests.get(url1).json()
+        data2 = requests.get(url2).json()
 
-    name1, temp1, hum1, wind1 = data1["name"], data1["main"]["temp"], data1["main"]["humidity"], data1["wind"]["speed"]
-    name2, temp2, hum2, wind2 = data2["name"], data2["main"]["temp"], data2["main"]["humidity"], data2["wind"]["speed"]
+        if data1.get("cod") != 200 or data2.get("cod") != 200:
+            print("One or both cities not found. Please check spelling.")
+            exit()
 
+        name1, temp1, hum1, wind1 = data1["name"], data1["main"]["temp"], data1["main"]["humidity"], data1["wind"]["speed"]
+        name2, temp2, hum2, wind2 = data2["name"], data2["main"]["temp"], data2["main"]["humidity"], data2["wind"]["speed"]
+        data1 = {"temp": temp1, "humidity": hum1, "wind": wind1}
+        data2 = {"temp": temp2, "humidity": hum2, "wind": wind2}
+
+    # === Print comparison ===
     print(f"\n{'=' * 50}")
-    print(f"Travel Weather Comparison: {name1} vs {name2}")
+    print(f"Travel Weather Comparison: {city1.capitalize()} vs {city2.capitalize()}")
     print("-" * 50)
-    print(f"{name1}: {temp1}°C, {hum1}% humidity, {wind1} m/s wind")
-    print(f"{name2}: {temp2}°C, {hum2}% humidity, {wind2} m/s wind")
+    print(f"{city1.capitalize()}: {data1['temp']}°C, {data1['humidity']}% humidity, {data1['wind']} m/s wind")
+    print(f"{city2.capitalize()}: {data2['temp']}°C, {data2['humidity']}% humidity, {data2['wind']} m/s wind")
 
-    diff_temp = round(temp2 - temp1, 1)
-    diff_hum = hum2 - hum1
+    diff_temp = round(data2["temp"] - data1["temp"], 1)
+    diff_hum = data2["humidity"] - data1["humidity"]
     print(f"\nTemperature difference: {diff_temp}°C")
     print(f"Humidity difference: {diff_hum}%")
     print("=" * 50)
 
     # === AI Travel Recommendation ===
     prompt = (
-        f"Compare weather for travel: {name1} ({temp1}°C, {hum1}% humidity, {wind1} m/s wind) "
-        f"and {name2} ({temp2}°C, {hum2}% humidity, {wind2} m/s wind). "
-        "Give a short, realistic travel recommendation: which city is better to visit now and why."
+        f"Compare weather for travel between {city1} ({data1['temp']}°C, {data1['humidity']}% humidity, {data1['wind']} m/s wind) "
+        f"and {city2} ({data2['temp']}°C, {data2['humidity']}% humidity, {data2['wind']} m/s wind). "
+        "Give a short, realistic travel recommendation: which city is better to visit and why."
     )
 
     response = groq_client.chat.completions.create(
@@ -141,8 +230,8 @@ if travel_mode:
 
     # === Packing List (short AI suggestion) ===
     pack_prompt = (
-        f"You are helping a traveler going from {name1} to {name2}. "
-        f"Destination weather: {desc_day}, {temp2}°C, humidity {hum2}%, wind {wind2} m/s. "
+        f"You are helping a traveler going from {city1.capitalize()} to {city2.capitalize()}. "
+        f"Destination weather: {desc_day}, {data2['temp']}°C, humidity {data2['humidity']}%, wind {data2['wind']} m/s. "
         "Suggest 4–5 short, practical items to pack for this trip."
     )
 
@@ -152,11 +241,8 @@ if travel_mode:
     )
 
     packing_list = pack_response.choices[0].message.content.strip()
-
     print("\n>>> Suggested Packing List <<<")
     print("-" * 50)
     print(packing_list)
     print("-" * 50)
     print()
-
-    exit()
