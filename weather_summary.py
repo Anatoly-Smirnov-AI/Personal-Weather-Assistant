@@ -35,6 +35,10 @@ if not travel_mode:
     response = requests.get(url)
     data = response.json()
 
+    if data.get("cod") != 200:
+        print("City not found. Please check the spelling and try again.")
+        exit()
+
     name = data["name"]
     temp = data["main"]["temp"]
     humidity = data["main"]["humidity"]
@@ -78,6 +82,10 @@ if travel_mode:
 
     data1 = requests.get(url1).json()
     data2 = requests.get(url2).json()
+
+    if data1.get("cod") != 200 or data2.get("cod") != 200:
+        print("One or both cities not found. Please check the spelling and try again.")
+        exit()
 
     name1, temp1, hum1, wind1 = data1["name"], data1["main"]["temp"], data1["main"]["humidity"], data1["wind"]["speed"]
     name2, temp2, hum2, wind2 = data2["name"], data2["main"]["temp"], data2["main"]["humidity"], data2["wind"]["speed"]

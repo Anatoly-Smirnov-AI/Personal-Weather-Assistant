@@ -17,6 +17,9 @@ It provides short weather summaries, activity suggestions, and travel comparison
   In this mode, the assistant compares key weather data, tells which city is better to visit, and even suggests what to pack.  
   It also shows a short 3-day forecast for the destination.
 
+- **Input validation:**  
+  Handles misspelled or unknown city names gracefully and shows a clear message instead of crashing.
+
 ---
 
 ## Example usage
@@ -68,6 +71,10 @@ Small backpack
 
 Portable charger
 
+**3️⃣ Handling typos**
+
+Enter city name (or two cities separated by comma for travel comparison): Zaagreb
+City not found. Please check the spelling and try again.
 
 ---
 
@@ -99,6 +106,7 @@ python weather_summary.py
 - The `.env` file should never be shared publicly.  
 - Use `.env.example` as a template to create your own configuration.  
 - Free tiers of both APIs are sufficient for testing.
+- The app validates city names and shows a friendly error if a city is not found.
 
 ---
 
